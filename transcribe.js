@@ -33,6 +33,14 @@ async function main() {
   const timeSplits = process.argv[3] ? process.argv[3].split(',').map(Number) : [];
   const outputDir = path.dirname(inputPath);
   const baseName = path.basename(inputPath, path.extname(inputPath));
+  const summarizePromptPath = process.argv[4] ? process.argv[4] : "";
+
+  //Load summarize prompt if provided
+  let summarizePrompt = "";
+  if (summarizePromptPath && fs.existsSync(summarizePromptPath)) {
+    console.log(`Loading summarize prompt from: ${summarizePromptPath}`);
+    summarizePrompt = fs.readFileSync(summarizePromptPath, 'utf8').trim();
+  }
 
   // Convert MP4 to MP3
   console.log(`Starting conversion of "${inputPath}" to MP3...`);
@@ -47,7 +55,7 @@ async function main() {
 
   // Process audio based on time splits
   let allSegments = [];
-  
+
   if (timeSplits.length > 0) {
     console.log('Time splits detected. Splitting audio into chunks: ', timeSplits.join(', '));
     const duration = await getAudioDuration(audioPath);
@@ -87,18 +95,20 @@ async function main() {
   console.log(`Transcript saved to: ${outputPath}`);
 
 
-  // Summarize the transcript
-  console.log('Summarizing the transcript...');
-  const response = await summarize(transcript);
-  const sum = response.response.text();
+  if (summarizePrompt && summarizePrompt.length > 0) {
 
-  // Save the summary to a file
-  summarizeOutputPath = path.join(outputDir, `${baseName}_summary.md`);
-  fs.writeFileSync(summarizeOutputPath, sum);
+    // Summarize the transcript
+    console.log('Summarizing the transcript...');
+    const response = await summarize(transcript);
+    const sum = response.response.text();
 
-  console.log(`Summary saved to: ${summarizeOutputPath}`);
-  console.log(`Total cost for transcription: $${totalCost.toFixed(4)}`); // Display total cost based on duration
-  console.log('Transcription and summarization complete.\n');
+    // Save the summary to a file
+    summarizeOutputPath = path.join(outputDir, `${baseName}_summary.md`);
+    fs.writeFileSync(summarizeOutputPath, sum);
+    console.log(`Summary saved to: ${summarizeOutputPath}`);
+  }
+
+  console.log(`Total cost for transcription: $${totalCost.toFixed(4)}`);
 }
 
 async function convertToMp3(inputPath, outputPath) {
@@ -131,7 +141,7 @@ async function splitAudioIntoChunks(audioPath, timeSplits, duration, outputDir) 
     if (start >= end) continue;
 
     const chunkPath = path.join(outputDir, `${path.basename(audioPath, '.mp3')}_chunk${i}.mp3`);
-    
+
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(audioPath)
@@ -167,7 +177,7 @@ async function transcribeAudio(audioPath) {
 }
 
 function formatSegments(segments) {
-  return segments.map(segment => 
+  return segments.map(segment =>
     `[${formatTime(segment.start)} --> ${formatTime(segment.end)}] ${segment.text}`
   ).join('\n');
 }
